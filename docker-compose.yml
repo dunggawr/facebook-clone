@@ -1,27 +1,41 @@
-version: '3.8'
+# Hạ tầng cho server 4GB RAM: giới hạn RAM từng container.
 services:
   postgres:
-    image: postgres:15-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: secretpassword
-      POSTGRES_DB: facebook_db
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Giới hạn RAM cho container này để bảo vệ máy 4GB
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+    command: >
+      postgres
+      -c shared_buffers=384MB
+      -c effective_cache_size=1GB
+      -c work_mem=8MB
+      -c max_connections=60
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
-    restart: always
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    command: redis-server --maxmemory 384mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redisdata:/data
+    mem_limit: 450m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
   pgdata:
+  redisdata:
